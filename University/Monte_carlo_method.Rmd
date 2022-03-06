@@ -1,0 +1,514 @@
+---
+title: "Modello Black and Scholes e volatilità implicita"
+author: "Francesco Gabellini , Ilaria Pasini"
+date: "30/5/2020"
+output: html_document
+---
+
+###### Set-up Ambiente:
+
+Carico le librerie
+
+```{r echo = T, results = 'hide',warning=FALSE,message=FALSE}
+library(tidyverse)
+library(readxl)
+library(plotly)
+set.seed(42)
+```
+
+Imposto la Working Directory e carico dati
+```{r}
+setwd("C:/Users/gabel/Desktop/Gestione Del Rischio 2/Progetto")
+dati <- read_excel("dati.xls", na = "#N/A")
+```
+
+Trasformo dati da Formato  Wide a Long
+```{r}
+data_long <- gather(dati, Moneyness, measurement, 2:14, factor_key=TRUE)
+names(data_long)[names(data_long) == "measurement"] <- "volatility"
+data_long$Moneyness <- (as.numeric(as.character(data_long$Moneyness))/100)
+data_long$Strike <- data_long$price * as.numeric(as.character(data_long$Moneyness))
+```
+
+
+1) Visualizzare graficamente il valore alla data t 1/5/2020 delle call e delle put al variare
+della moneyness (St /K) e della time-to-maturity (T ¡t ). Analogamente, graficare delta
+e vega della call.
+
+
+Creo funzione Per calcolo Opzioni
+```{r}
+Call <- function(S, K, r, T, sigma) {
+  d1  <-  (log(S/K) + (r + sigma^2/2)*T) / (sigma*sqrt(T))
+  d2  <-  d1 - sigma*sqrt(T)
+  S * pnorm(d1)  - K*exp(-r*T)*pnorm(d2)
+}
+
+Put <- function(S, K, r, T, sigma) {
+  d1  <-  (log(S/K) + (r + sigma^2/2)*T) / (sigma*sqrt(T))
+  d2  <-  d1 - sigma*sqrt(T)
+  -S * pnorm(-d1) + K*exp(-r*T)*pnorm(-d2)
+}
+
+```
+
+
+Aggiungo prezzi al Dataframe
+```{r}
+
+df <- data_long %>% mutate(
+  Call = Call(price, Strike, rate, Time, volatility),
+  Put = Put(price, Strike, rate, Time, volatility),
+  Data= as.Date(Timestamp, format = "%Y-%m-%d")
+)
+
+```
+
+
+Grafico Call rispetto a Time To Maturity e Moneyness
+```{r}
+df_plot <- df %>% filter(Data=='2020-05-01')
+PlotCall <- plot_ly(z = df_plot$Call, y = df_plot$Moneyness,x = df_plot$Time, type = 'mesh3d')
+axz = list(
+  title ='Call'
+)
+axx = list(
+  title = 'Time to maturity',
+  nticks = 6,
+  range = c(0, 2)
+)
+axy = list(
+  title = 'Moneyness'
+)
+PlotCall  <- PlotCall %>% layout(scene = list(yaxis = axy, xaxis = axx, zaxis = axz))
+PlotCall
+```
+
+Grafico Put rispetto a Time To Maturity e Moneyness
+```{r}
+fig <- plot_ly(z = df_plot$Put, y = df_plot$Moneyness,x = df_plot$Time, type = 'mesh3d')
+axz = list(
+  title ='Put'
+)
+axx = list(
+  title = 'Time to maturity',
+  nticks = 6,
+  range = c(0, 2)
+)
+axy = list(
+  title = 'Moneyness'
+)
+PlotPut  <- fig %>% layout(scene = list(yaxis = axy, xaxis = axx, zaxis = axz))
+PlotPut
+```
+
+Creo funzione Per calcolo Delta
+```{r}
+DeltaCall <- function(S, K, r, T, sigma) {
+  d1  <-  (log(S/K) + (r + sigma^2/2)*T) / (sigma*sqrt(T))
+  d2  <-  d1 - sigma*sqrt(T)
+  pnorm(d1)  
+}
+
+```
+
+Aggiungo Delta al Dataframe
+```{r}
+df <- df %>% mutate(
+  DeltaCall = DeltaCall(price, Strike, rate, Time, volatility),
+)
+```
+
+Grafico Delta rispetto a Time To Maturity e Moneyness
+```{r}
+df_plot <- df %>% filter(Data=='2020-05-01')
+PlotDelta <- plot_ly(z = df_plot$DeltaCall, y = df_plot$Moneyness,x = df_plot$Time, type = 'mesh3d')
+axz = list(
+  title ='Delta'
+)
+axx = list(
+  title = 'Time to maturity',
+  nticks = 6,
+  range = c(0, 2)
+)
+axy = list(
+  title = 'Moneyness'
+)
+PlotDelta  <- PlotDelta %>% layout(scene = list(yaxis = axy, xaxis = axx, zaxis = axz))
+PlotDelta
+```
+
+Calcolo Vega
+
+```{r}
+VegaCall <- function(S, K, r, T, sigma) {
+  d1  <-  (log(S/K) + (r + sigma^2/2)*T) / (sigma*sqrt(T))
+  d2  <-  d1 - sigma*sqrt(T)
+   S * dnorm(d1)*sqrt(T)
+}
+
+```
+
+Aggiungo Vega al Dataframe
+```{r}
+df <- df %>% mutate(
+  VegaCall = VegaCall(price, Strike, rate, Time, volatility),
+)
+```
+
+Grafico Vega rispetto a Time To Maturity e Moneyness
+```{r}
+df_plot <- df %>% filter(Data=='2020-05-01')
+PloVega <- plot_ly(z = df_plot$VegaCall, y = df_plot$Moneyness,x = df_plot$Time, type = 'mesh3d')
+axz = list(
+  title ='Vega'
+)
+axx = list(
+  title = 'Time to maturity',
+  nticks = 6,
+  range = c(0, 2)
+)
+axy = list(
+  title = 'Moneyness'
+)
+PloVega  <- PloVega %>% layout(scene = list(yaxis = axy, xaxis = axx, zaxis = axz))
+PloVega
+```
+2) Visualizzare graficamente il valore della voltilità implicita come funzione della scadenza
+e della moneyness sempre alla data t 1/5/2020 (superficie di volatilità).
+
+```{r}
+df_plot <- df %>% filter(Data=='2020-05-01')
+
+
+PloVol <- plot_ly(z = df_plot$volatility, y = df_plot$Moneyness,x = df_plot$Time, type = 'mesh3d')
+axz = list(
+  title ='Volatility'
+)
+axx = list(
+  title = 'Time to maturity',
+  nticks = 6,
+  range = c(0, 2)
+)
+axy = list(
+  title = 'Moneyness'
+)
+PloVol  <- PloVol %>% layout(scene = list(yaxis = axy, xaxis = axx, zaxis = axz))
+PloVol
+```
+3)  Alla data t 1/5/2020 si valuti un portafoglio lungo di una call con moneyness 85%,
+corto di due call conmoneyness 90% e lungo di un’altra call conmoneyness 95%, tutte
+con scadenza 3 mesi.
+
+Filtro Dataframe per Data e Scadenza
+```{r}
+dfpf <- df %>% filter(Data=='2020-05-01',Time==0.250)
+
+```
+
+Calcolo Valore del Portafoglio
+```{r}
+Call1 <- Call(dfpf$price[dfpf$Moneyness==0.85], dfpf$Strike[dfpf$Moneyness==0.85], dfpf$rate[dfpf$Moneyness==0.85],  dfpf$Time[dfpf$Moneyness==0.85], dfpf$volatility[dfpf$Moneyness==0.85])
+Call2 <- Call(dfpf$price[dfpf$Moneyness==0.90], dfpf$Strike[dfpf$Moneyness==0.90], dfpf$rate[dfpf$Moneyness==0.90],  dfpf$Time[dfpf$Moneyness==0.90], dfpf$volatility[dfpf$Moneyness==0.90])
+Call3 <- Call(dfpf$price[dfpf$Moneyness==0.95], dfpf$Strike[dfpf$Moneyness==0.95], dfpf$rate[dfpf$Moneyness==0.95],  dfpf$Time[dfpf$Moneyness==0.95], dfpf$volatility[dfpf$Moneyness==0.95])
+
+pf <- Call1-2*Call2+Call3
+pf
+```
+
+Creo Andamento Payoff su  sottostante
+```{r}
+massimo <- round(max(df$price[dfpf$Moneyness==0.95], na.rm = TRUE))
+minimo <- round(min(df$price[dfpf$Moneyness==0.95], na.rm = TRUE))
+
+datalist = list()
+Strike1 <- dfpf$Strike[dfpf$Moneyness==0.85]
+Strike2 <- dfpf$Strike[dfpf$Moneyness==0.9]
+Strike3 <- dfpf$Strike[dfpf$Moneyness==0.95]
+
+for (i in minimo:massimo) {
+    dat <- data.frame(max(0,i-Strike1)-2*max(0,i-Strike2)+max(0,i-Strike3))
+    dat$Sottostante <- i  
+    datalist[[i]] <- dat 
+}
+pf_Sottostante = do.call(rbind, datalist)
+colnames(pf_Sottostante)[1] <- "PayOff"
+```
+
+Creo grafico di tale andamento
+```{r}
+ggplot(data=pf_Sottostante)+ 
+  geom_line(aes(Sottostante , PayOff),
+                data =  )
+```
+
+
+4)  Valutare un portafoglio analogo (1 = 85%, -2 = 90%, +1 = 95%) per ogni cross-section,
+cioè per ogni data dal 1/1/2017 al 1/5/2020.
+Analizzare la relazione fra i prezzi ottenuti e la volatilità implicita per lamoneyness 90%
+e scadenza 3mesi.
+
+Creo portafoglio Cross
+```{r}
+dfpf2 <- df %>% filter(Time==0.250)
+
+pf_cross1 <- dfpf2 %>% filter(Moneyness==0.85) %>% mutate(
+Call1 = Call(price, Strike, rate, Time, volatility)
+)
+pf_cross2 <- dfpf2 %>% filter(Moneyness==0.9) %>% mutate(
+Call2 = Call(price, Strike, rate, Time, volatility)
+)
+pf_cross3 <- dfpf2 %>% filter(Moneyness==0.95) %>% mutate(
+Call3 = Call(price, Strike, rate, Time, volatility)
+)
+
+pf_cross <- cbind.data.frame(pf_cross2$Data,pf_cross2$volatility,pf_cross2$price,pf_cross1$Call1,pf_cross2$Call2,pf_cross3$Call3)
+colnames(pf_cross) <- c("Data","volatility","Price","Call1","Call2","Call3")
+pf_cross <- pf_cross %>% mutate(
+Portafoglio=(Call1-2*Call2+Call3)
+)
+```
+
+
+Creo grafico di tale portafoglio
+```{r}
+ggplot(data=pf_cross)+ 
+  geom_line(aes(Data , Portafoglio),
+                data =  )
+```
+
+
+Creo grafico rispetto a volatilità
+```{r}
+ggplot(data=pf_cross)+ 
+  geom_line(aes(volatility , Portafoglio),
+                data =  )
+```
+
+Creo Dataframe andamento rispetto a Volatilità,
+a parità delle altre condizioni per studiarne meglio l'effetto.
+```{r}
+Sottostante <- df %>% filter(Data=='2020-05-01',Time==0.083,Moneyness==1) %>%  select (price)
+massimo <- round(max(df$volatility[dfpf$Moneyness==0.95]*100, na.rm = TRUE))
+minimo <- round(min(df$volatility[dfpf$Moneyness==0.95]*100, na.rm = TRUE))
+datalistV = list()
+
+for (i in minimo:massimo) {
+    dat <- data.frame(
+      (Call(Sottostante$price, Strike1, dfpf$rate[dfpf$Moneyness==0.85], 0.250, i/100)
+     -2*Call(Sottostante$price, Strike2, dfpf$rate[dfpf$Moneyness==0.90], 0.250, i/100)
+     +Call(Sottostante$price, Strike3, dfpf$rate[dfpf$Moneyness==0.95], 0.250, i/100))
+      
+    )
+    dat$Volatility <- i  
+    datalistV[[i]] <- dat 
+}
+price_Vola = do.call(rbind, datalistV)
+colnames(price_Vola)[1] <- "Portafoglio"
+```
+
+Creo grafico del portafoglio rispetto alla volatilità
+```{r}
+ggplot(data=price_Vola)+ 
+  geom_line(aes(Volatility , Portafoglio),
+                data =  )
+```
+
+
+5)Alla data t 1/5/2020 caclolare il VaR ed ES con orizzonte 1 giorno per i livelli 0.95,
+0.98, 0.99 assumendo rendimenti log-normali e volatilità pari alla volatilità implicita
+at-the-money per la scadenza un mese.
+
+
+
+Calcolo VAR
+N.B. :Nel punto 3 Ho gia calcolato valore del portafoglio ad oggi
+```{r}
+
+Vola <- df %>% filter(Data=='2020-05-01',Time==0.083,Moneyness==1) %>%  select (volatility)
+Sottostante <- df %>% filter(Data=='2020-05-01',Time==0.083,Moneyness==1) %>%  select (price)
+
+var=c()
+nrSamples = 100000
+
+for (i in 1:nrSamples){
+  
+  rendimento =rnorm(n = 1, mean = 0, sd =  Vola$volatility * sqrt(1/365))
+  
+  Previsione = Sottostante$price * exp(rendimento)
+  
+  var[i] =((Call(Previsione, Strike1, dfpf$rate[dfpf$Moneyness==0.85], 0.250,dfpf$volatility[dfpf$Moneyness==0.85])
+    -2*Call(Previsione, Strike2, dfpf$rate[dfpf$Moneyness==0.90], 0.250, dfpf$volatility[dfpf$Moneyness==0.90])
+    +Call(Previsione, Strike3, dfpf$rate[dfpf$Moneyness==0.95], 0.250, dfpf$volatility[dfpf$Moneyness==0.95]))-pf)
+
+}
+VAR95= -quantile(var,probs=0.05)
+VAR98= -quantile(var,probs=0.02)
+VAR99= -quantile(var,probs=0.01)
+
+VAR95
+VAR98
+VAR99
+
+
+```
+
+Calcolo ES come Media dei punti che si trovano oltre il quantile identificato dal VAR
+```{r}
+#ES
+ES95 = -mean(var[var<quantile(var,probs=0.05)])
+ES98 = -mean(var[var<quantile(var,probs=0.02)])
+ES99 = -mean(var[var<quantile(var,probs=0.01)])
+
+ES95
+ES98
+ES99
+
+
+
+```
+
+
+6) Ripetere la valutazione fatta al punto precedente usando come volatilità quella stimata
+sulla serie storica del sottostante.
+
+Stimo Volatilità
+```{r}
+SottostanteStorico <- df %>% filter(Time==0.083,Moneyness==1) %>%  select (price)
+vola_Storica = sqrt(var(diff(log(SottostanteStorico$price)),na.rm = TRUE))
+```
+
+Calcolo VAR
+```{r}
+
+Vola <- df %>% filter(Data=='2020-05-01',Time==0.083,Moneyness==1) %>%  select (volatility)
+Sottostante <- df %>% filter(Data=='2020-05-01',Time==0.083,Moneyness==1) %>%  select (price)
+
+var=c()
+
+nrSamples = 100000
+
+for (i in 1:nrSamples){
+  
+  rendimento =rnorm(n = 1, mean = 0, sd =  vola_Storica)
+  
+  Previsione = Sottostante$price * exp(rendimento)
+  
+  var[i] =( (Call(Previsione, Strike1, dfpf$rate[dfpf$Moneyness==0.85], 0.250,dfpf$volatility[dfpf$Moneyness==0.85])
+    -2*Call(Previsione, Strike2, dfpf$rate[dfpf$Moneyness==0.90], 0.250, dfpf$volatility[dfpf$Moneyness==0.90])
+    +Call(Previsione, Strike3, dfpf$rate[dfpf$Moneyness==0.95], 0.250, dfpf$volatility[dfpf$Moneyness==0.95]))-pf)
+
+}
+
+VAR95= -quantile(var,probs=0.05)
+VAR98= -quantile(var,probs=0.02)
+VAR99= -quantile(var,probs=0.01)
+
+VAR95
+VAR98
+VAR99
+
+
+```
+
+Calcolo ES come Media dei punti che si trovano oltre il quantile identificato dal VAR
+```{r}
+#ES
+ES95 = -mean(var[var<quantile(var,probs=0.05)])
+ES98 = -mean(var[var<quantile(var,probs=0.02)])
+ES99 = -mean(var[var<quantile(var,probs=0.01)])
+
+ES95
+ES98
+ES99
+
+
+
+```
+
+7) Ripetere nuovamente la valutazione di VaR ed ES usando un metodo di simulazione storica.
+
+Calcolo Valore Del P&L Del portafoglio nel tempo e ne estraggo quantile empirico,
+Ricordo che ho già valutato il portafoglio nel punto 4 per cross.
+```{r}
+rendimenti_storici_pf = diff(pf_cross$Portafoglio)
+VAR95= -quantile(rendimenti_storici_pf,probs=0.05,na.rm=TRUE)
+VAR98= -quantile(rendimenti_storici_pf,probs=0.02,na.rm=TRUE)
+VAR99= -quantile(rendimenti_storici_pf,probs=0.01,na.rm=TRUE)
+VAR95
+VAR98
+VAR99
+```
+
+Rispetto a VAR calcolo Media dei punti precedenti a quantile identificato
+```{r}
+#ES
+ES95 = -mean(rendimenti_storici_pf[rendimenti_storici_pf<quantile(rendimenti_storici_pf,probs=0.05,na.rm=TRUE)],na.rm=TRUE)
+ES98 = -mean(rendimenti_storici_pf[rendimenti_storici_pf<quantile(rendimenti_storici_pf,probs=0.02,na.rm=TRUE)],na.rm=TRUE)
+ES99 = -mean(rendimenti_storici_pf[rendimenti_storici_pf<quantile(rendimenti_storici_pf,probs=0.01,na.rm=TRUE)],na.rm=TRUE)
+ES95
+ES98
+ES99
+
+
+
+```
+
+8)Sviluppare un medodo delta-normal usando come fattori di rischio il sottostante e la
+volatilità implicita per lemoneyness delle tre opzioni per un totale di 4 fattori. Calcolare
+VaR ed ES con il metodo sviluppato.`
+
+```{r}
+dfDelta85 <- df %>% filter(Time==0.250,Moneyness==0.85) %>%  select (price,volatility,rate,Data)
+dfDelta90 <- df %>% filter(Time==0.250,Moneyness==0.90) %>%  select (price,volatility,rate,Data)
+dfDelta95 <- df %>% filter(Time==0.250,Moneyness==0.95) %>%  select (price,volatility,rate,Data)
+
+Prezzo <- Sottostante$price
+
+
+pf_delta <- cbind.data.frame(dfDelta85$price,dfDelta85$volatility,dfDelta90$volatility,dfDelta95$volatility)
+colnames(pf_delta) <- c("Price","volatility85","volatility90","volatility95")
+
+MatriceVarianze=cov(na.omit(pf_delta))
+
+g <-  c(
+(DeltaCall(Prezzo, Prezzo, dfDelta85$rate[dfDelta85$Data=='2020-05-01'],0.250,
+          dfDelta85$volatility[dfDelta85$Data=='2020-05-01'])
+-2*DeltaCall(Prezzo, Prezzo, dfDelta90$rate[dfDelta90$Data=='2020-05-01'],0.250,
+          dfDelta90$volatility[dfDelta90$Data=='2020-05-01'])
++DeltaCall(Prezzo, Prezzo, dfDelta95$rate[dfDelta95$Data=='2020-05-01'],0.250,
+          dfDelta95$volatility[dfDelta95$Data=='2020-05-01']))
+,
+
+(VegaCall(Prezzo, Strike1, 
+dfDelta85$rate[dfDelta85$Data=='2020-05-01'],0.250,dfDelta85$volatility[dfDelta85$Data=='2020-05-01'])),
+
+(-2*VegaCall(Prezzo, Strike2, 
+dfDelta90$rate[dfDelta90$Data=='2020-05-01'],0.250,dfDelta90$volatility[dfDelta90$Data=='2020-05-01'])),
+
+(VegaCall(Prezzo, Strike3, 
+dfDelta95$rate[dfDelta95$Data=='2020-05-01'],0.250,dfDelta95$volatility[dfDelta95$Data=='2020-05-01']))
+)
+g <-  matrix(g, ncol = 1, nrow =4)
+VarianzaDeltaNormal <-  t(g)%*%MatriceVarianze%*%g
+
+DeltaNormal95 = -(qnorm(0.05,mean=0,sd= sqrt(VarianzaDeltaNormal)))
+DeltaNormal98 = -(qnorm(0.02,mean=0,sd= sqrt(VarianzaDeltaNormal)))
+DeltaNormal99 = -(qnorm(0.01,mean=0,sd= sqrt(VarianzaDeltaNormal)))
+
+
+DeltaNormal95
+DeltaNormal98
+DeltaNormal99
+```
+
+```{r}
+ES_delta_normal95 = dnorm(qnorm(0.05))/0.05 * sqrt(VarianzaDeltaNormal)
+ES_delta_normal98 = dnorm(qnorm(0.02))/0.02 * sqrt(VarianzaDeltaNormal)
+ES_delta_normal99 = dnorm(qnorm(0.01))/0.01 * sqrt(VarianzaDeltaNormal)
+ES_delta_normal95
+ES_delta_normal98
+ES_delta_normal99
+```
+
+
